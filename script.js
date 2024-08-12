@@ -1,18 +1,15 @@
-let display = document.getElementById('display');
+const bar = document.getElementById('bar');
+const close = document.getElementById('close');
+const nav = document.getElementById('navbar');
 
-function clearDisplay() {
-	display.value = '';
+if(bar){
+    bar.addEventListener('click', () =>{
+        nav.classList.add('active');
+    })
 }
 
-function appendToDisplay(value) {
-	display.value += value;
-}
-
-function calculate() {
-	try {
-		let result = eval(display.value);
-		display.value = result;
-	} catch (e) {
-		display.value = 'Error';
-	}
+if(close){
+    close.addEventListener('click', () =>{
+        nav.classList.remove('active');
+    })
 }
