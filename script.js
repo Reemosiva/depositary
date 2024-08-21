@@ -1,131 +1,188 @@
-const todoInput = document.querySelector(".todo-input");
-const todoButton = document.querySelector(".todo-button");
-const todoList = document.querySelector(".todo-list");
-const filterOption = document.querySelector(".filter-todo");
+const board = document.querySelector("#board");
+const modalContainer = document.querySelector("#modal-container");
+const modalMessage = document.querySelector("#modal-message");
+const resetButton = document.querySelector("#reset");
 
-document.addEventListener("DOMContentLoaded", getLocalTodos);
-todoButton.addEventListener("click", addTodo);
-todoList.addEventListener("click", deleteCheck);
-filterOption.addEventListener("change", filterTodo);
-
-function addTodo(event) {
-    event.preventDefault();
-    const todoDiv = document.createElement("div");
-    todoDiv.classList.add("todo");
-    const newTodo = document.createElement("li");
-    newTodo.innerText = todoInput.value; 
-    newTodo.classList.add("todo-item");
-    todoDiv.appendChild(newTodo);
-    //ADDING TO LOCAL STORAGE 
-    saveLocalTodos(todoInput.value);
-    
-    const completedButton = document.createElement("button");
-    completedButton.innerHTML = '<i class="fas fa-check-circle"></li>';
-    completedButton.classList.add("complete-btn");
-    todoDiv.appendChild(completedButton);
-
-    const trashButton = document.createElement("button");
-    trashButton.innerHTML = '<i class="fas fa-trash"></li>';
-    trashButton.classList.add("trash-btn");
-    todoDiv.appendChild(trashButton);
-    
-    todoList.appendChild(todoDiv);
-    todoInput.value = "";
+resetButton.onclick = () => {
+  location.reload();
 }
 
-function deleteCheck(e) {
-    const item = e.target;
+const RED_TURN = 1;
+const YELLOW_TURN = 2;
 
-    if(item.classList[0] === "trash-btn") {
-        const todo = item.parentElement;
-        todo.classList.add("slide");
+// 0 - empty, 1 - red, 2 - yellow
+const pieces = [
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+];
 
-        removeLocalTodos(todo);
-        todo.addEventListener("transitionend", function() {
-            todo.remove();
-        });
+let playerTurn = RED_TURN; // 1 - red, 2 - yellow
+let hoverColumn = -1;
+let animating = false;
+
+for (let i = 0; i < 42; i++) {
+  let cell = document.createElement("div");
+  cell.className = "cell";
+  board.appendChild(cell);
+
+  cell.onmouseenter = () => {
+    onMouseEnteredColumn(i % 7);
+  }
+  cell.onclick = () => {
+    if(!animating) {
+      onColumnClicked(i % 7);
     }
-
-    if(item.classList[0] === "complete-btn") {
-        const todo = item.parentElement;
-        todo.classList.toggle("completed");
-    }
+  }
 }
 
-function filterTodo(e) {
-    const todos = todoList.childNodes;
-    todos.forEach(function(todo) {
-        switch(e.target.value) {
-            case "all": 
-                todo.style.display = "flex";
-                break;
-            case "completed": 
-                if(todo.classList.contains("completed")) {
-                    todo.style.display = "flex";
-                } else {
-                    todo.style.display = "none";
-                }
-                break;
-            case "incomplete":
-                if(!todo.classList.contains("completed")) {
-                    todo.style.display = "flex";
-                } else {
-                    todo.style.display = "none";
-                }
-                break;
-        }
-    });
+function onColumnClicked(column) {
+  let availableRow = pieces.filter( (_, index) => index % 7 === column).lastIndexOf(0);
+  if(availableRow === -1) {
+    // no space in the column
+    return;
+  }
+
+  pieces[(availableRow * 7) + column] = playerTurn;
+  let cell = board.children[(availableRow * 7) + column];
+  
+  let piece = document.createElement("div");
+  piece.className = "piece";
+  piece.dataset.placed = true;
+  piece.dataset.player = playerTurn;
+  cell.appendChild(piece);
+
+  let unplacedPiece = document.querySelector("[data-placed='false']");
+  let unplacedY = unplacedPiece.getBoundingClientRect().y;
+  let placedY = piece.getBoundingClientRect().y;
+  let yDiff = unplacedY - placedY;
+
+  animating = true;
+  removeUnplacedPiece();
+  let animation = piece.animate(
+    [
+      { transform: `translateY(${yDiff}px)`, offset: 0},
+      { transform: `translateY(0px)`, offset: 0.6},
+      { transform: `translateY(${yDiff / 20}px)`, offset: 0.8},
+      { transform: `translateY(0px)`, offset: 0.95}
+    ],
+    {
+      duration: 400,
+      easing: "linear",
+      iterations: 1
+    }
+  );
+  animation.addEventListener('finish', checkGameWinOrDraw)
 }
 
-function saveLocalTodos(todo) {
-    let todos;
-    if(localStorage.getItem("todos") === null) {
-        todos = [];
-    } else {
-        todos = JSON.parse(localStorage.getItem("todos"));
-    }
-    todos.push(todo);
-    localStorage.setItem("todos", JSON.stringify(todos));
+function checkGameWinOrDraw() {
+  animating = false;
+
+  // check if game is a draw
+  if(!pieces.includes(0)) {
+    // game is a draw
+    modalContainer.style.display = "block";
+    modalMessage.textContent = "Draw";
+  }
+
+  // check if the current player has won
+  if(hasPlayerWon(playerTurn, pieces)) {
+    // current player has won
+    modalContainer.style.display = "block";
+    modalMessage.textContent = `${playerTurn === RED_TURN ? "Red" : "Yellow"} WON!`;
+    modalMessage.dataset.winner = playerTurn;
+  }
+
+
+  if(playerTurn === RED_TURN) {
+    playerTurn = YELLOW_TURN;
+  } else {
+    playerTurn = RED_TURN;
+  }
+
+  // update hovering piece
+  updateHover();
 }
 
-function getLocalTodos() {
-    let todos;
-    if(localStorage.getItem("todos") === null) {
-        todos = [];
-    } else {
-        todos = JSON.parse(localStorage.getItem("todos"));
-    }
-    todos.forEach(function(todo) {
-        const todoDiv = document.createElement("div");
-        todoDiv.classList.add("todo");
-        const newTodo = document.createElement("li");
-        newTodo.innerText = todo;
-        newTodo.classList.add("todo-item");
-        todoDiv.appendChild(newTodo);
+function updateHover() {
+  removeUnplacedPiece();
 
-        const completedButton = document.createElement("button");
-        completedButton.innerHTML = '<i class="fas fa-check-circle"></li>';
-        completedButton.classList.add("complete-btn");
-        todoDiv.appendChild(completedButton);
-
-        const trashButton = document.createElement("button");
-        trashButton.innerHTML = '<i class="fas fa-trash"></li>';
-        trashButton.classList.add("trash-btn");
-        todoDiv.appendChild(trashButton);
-
-        todoList.appendChild(todoDiv);
-    });
+  // add piece
+  if(pieces[hoverColumn] === 0) {
+    let cell = board.children[hoverColumn];
+    let piece = document.createElement("div");
+    piece.className = "piece";
+    piece.dataset.placed = false;
+    piece.dataset.player = playerTurn;
+    cell.appendChild(piece);
+  }
 }
 
-function removeLocalTodos(todo) {
-    let todos;
-    if(localStorage.getItem("todos") === null) {
-        todos = [];
-    } else {
-        todos = JSON.parse(localStorage.getItem("todos"));
+function removeUnplacedPiece() {
+  let unplacedPiece = document.querySelector("[data-placed='false']");
+  if(unplacedPiece) {
+    unplacedPiece.parentElement.removeChild(unplacedPiece);
+  }
+}
+
+function onMouseEnteredColumn(column) {
+  hoverColumn = column;
+  if(!animating){
+    updateHover();
+  }
+}
+
+function hasPlayerWon(playerTurn, pieces) {
+  for (let index = 0; index < 42; index++) {
+    // check horiztonal win starting at index
+    if(
+      index % 7 < 4 &&
+      pieces[index] === playerTurn &&
+      pieces[index + 1] === playerTurn &&
+      pieces[index + 2] === playerTurn &&
+      pieces[index + 3] === playerTurn
+    ) {
+      return true;
     }
 
-    const todoIndex = todo.children[0].innerText;
-    todos.splice(todos.indexOf(todoIndex), 1);
-    localStorage.setItem("todos", JSON.stringify(todos));
+    // check vertical win starting at index
+    if(
+      index < 21 &&
+      pieces[index] === playerTurn &&
+      pieces[index + 7] === playerTurn &&
+      pieces[index + 14] === playerTurn &&
+      pieces[index + 21] === playerTurn
+    ) {
+      return true;
+    }
+
+    // check diagonal win starting at index
+    if(
+      index % 7 < 4 &&
+      index < 18 &&
+      pieces[index] === playerTurn &&
+      pieces[index + 8] === playerTurn &&
+      pieces[index + 16] === playerTurn &&
+      pieces[index + 24] === playerTurn
+    ) {
+      return true;
+    }
+
+    // check diagonal win (other direction) starting at index
+    if(
+      index % 7 >= 3 &&
+      index < 21 &&
+      pieces[index] === playerTurn &&
+      pieces[index + 6] === playerTurn &&
+      pieces[index + 12] === playerTurn &&
+      pieces[index + 18] === playerTurn
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
